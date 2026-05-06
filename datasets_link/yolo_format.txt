@@ -1,0 +1,5 @@
+The kaggle link for training and testing data :
+"https://www.kaggle.com/datasets/ishworsubedii/vehicle-number-plate-datasetnepal"
+
+ the distribution of datasets available has images in images folder and its labels in corresponding labels folder
+You can split the dataset into train,test and val using split1.py or go through project.ipynb file.

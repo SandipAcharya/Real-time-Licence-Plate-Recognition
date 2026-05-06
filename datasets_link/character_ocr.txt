@@ -1,0 +1,8 @@
+The kaggle link for training and testing data :
+"https://www.kaggle.com/datasets/inspiring-lab/nepali-number-plate-characters-dataset"
+
+The dataset contains the 34 different Nepali characters images present in the number plates of Nepali Vehicles. It contains a total of 26,537 images of characters.
+['भे', 'ज', 'त', 'डि', '६', 'क', 'ना', 'से', 'ब', '२', 'बा', '४',
+       'प', 'ञ', 'झ', '७', 'ख', 'मे', '५', 'म', 'ह', 'य', '०', 'सी', 'च',
+       'सु', 'प्र', '९', 'लु', '१', 'ग', 'को', '३', '८']
+for splitting into training and testing data you can go through ocr.ipynb
