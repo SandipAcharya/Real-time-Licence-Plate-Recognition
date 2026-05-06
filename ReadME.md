@@ -28,7 +28,8 @@ Nepali Number Plate Recognition Using SVM
 
 
 ## System Architecture
-   ![Automatic Nepali Number Plate Recognition System ](Real-time-Liscence-Plate-Recognition/datasets_link/image.png)
+   ![System Architecture](./Real-time-Licence-Plate-Recognition/datasets_link/image.png)
+
 
 
 ### YOLOv7 for Object Localization
