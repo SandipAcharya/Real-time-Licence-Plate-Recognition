@@ -7,14 +7,14 @@ class ProjectionSegmenter:
 
     def _normalize_binary(self, binary):
         """Ensure the background is black and text is white."""
-        top = binary[0:3, :]
-        bottom = binary[-3:, :]
-        left = binary[:, 0:3]
-        right = binary[:, -3:]
-        border_pixels = np.concatenate([top.flatten(), bottom.flatten(), left.flatten(), right.flatten()])
+        h, w = binary.shape
+        # Look at the center 50% of the image
+        center_region = binary[int(h*0.25):int(h*0.75), int(w*0.25):int(w*0.75)]
         
-        if np.mean(border_pixels) > 127:
-            # Background is white, invert to make background black
+        white_pixels = cv2.countNonZero(center_region)
+        total_pixels = center_region.size
+        
+        if white_pixels > total_pixels / 2:
             return cv2.bitwise_not(binary)
         return binary
 
@@ -25,14 +25,10 @@ class ProjectionSegmenter:
         else:
             gray = image
 
-        # Sharpen image to handle blurry crops
-        kernel_sharpen = np.array([[0,-1,0], [-1,5,-1], [0,-1,0]])
-        sharpened = cv2.filter2D(gray, -1, kernel_sharpen)
-
         # Bilateral filter to reduce noise while keeping edges sharp
-        blur = cv2.bilateralFilter(sharpened, 9, 75, 75)
+        blur = cv2.bilateralFilter(gray, 9, 75, 75)
         
-        # Otsu's thresholding (normal, not INV yet)
+        # Otsu's thresholding
         _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
         # Guarantee white text on black background
