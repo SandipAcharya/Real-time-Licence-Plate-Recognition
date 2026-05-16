@@ -8,7 +8,9 @@ import os
 
 from detection import LicensePlateDetector
 from ocr_easyocr import EasyOCRReader
-from ocr_legacy import LegacySVMReader
+from ocr_legacy import LegacySVMReader, RobustSVMReader
+from ocr_tesseract import TesseractReader
+from database import PlateDatabase
 from database import PlateDatabase
 
 st.set_page_config(page_title="Nepali ALPR System", layout="wide")
@@ -16,21 +18,47 @@ st.set_page_config(page_title="Nepali ALPR System", layout="wide")
 # --- Initialization ---
 @st.cache_resource
 def load_models():
-    detector = LicensePlateDetector(model_path='models/yolov8n.pt') # Mock model for now, replace with fine-tuned
+    detector = LicensePlateDetector(model_path='models/best.pt')
     ocr_modern = EasyOCRReader(languages=['ne', 'en'])
     ocr_legacy = LegacySVMReader(model_path='models/svm_model.pkl')
-    return detector, ocr_modern, ocr_legacy
+    ocr_robust = RobustSVMReader(model_path='models/svm_model.pkl')
+    ocr_tesseract = TesseractReader(language='nep')
+    return detector, ocr_modern, ocr_legacy, ocr_robust, ocr_tesseract
 
-detector, ocr_modern, ocr_legacy = load_models()
+detector, ocr_modern, ocr_legacy, ocr_robust, ocr_tesseract = load_models()
 db = PlateDatabase()
 
 # --- Helper Functions ---
-def process_image(image, use_legacy=False):
-    # Detect plates
-    st.write("Detecting plates...")
-    detections, cropped_plates = detector.detect(image)
+def pad_image(image, padding=20):
+    """Add white padding around image for better OCR results"""
+    if len(image.shape) == 3:
+        return cv2.copyMakeBorder(image, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[255, 255, 255])
+    return cv2.copyMakeBorder(image, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[255])
+
+def enhance_image(image):
+    """Upscale and sharpen blurry license plate crops for better deep learning OCR."""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # Upscale by 2x
+    gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    # Sharpen
+    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    sharpened = cv2.filter2D(gray, -1, kernel)
+    return cv2.cvtColor(sharpened, cv2.COLOR_GRAY2BGR)
+
+def process_image(image, use_legacy=False, is_cropped=False):
+    results = []
     
-    img_with_boxes = detector.draw_detections(image, detections)
+    if is_cropped:
+        # Bypass YOLO, use the whole image as the cropped plate
+        st.write("Processing pre-cropped plate...")
+        detections = []
+        cropped_plates = [image]
+        img_with_boxes = image.copy()
+    else:
+        # Detect plates using YOLO
+        st.write("Detecting plates...")
+        detections, cropped_plates = detector.detect(image)
+        img_with_boxes = detector.draw_detections(image, detections)
     
     results = []
     
@@ -38,28 +66,46 @@ def process_image(image, use_legacy=False):
     for i, cropped in enumerate(cropped_plates):
         st.write(f"Processing plate {i+1}...")
         
-        # Modern OCR
+        # Enhance and pad for Modern OCRs
+        enhanced_cropped = enhance_image(cropped)
+        padded_cropped = pad_image(enhanced_cropped)
+        
+        # Modern OCR (EasyOCR)
         t0 = time.time()
-        text_mod, conf_mod = ocr_modern.read_text(cropped)
+        text_mod, conf_mod = ocr_modern.read_text(padded_cropped)
         t_mod = time.time() - t0
         
-        # Legacy OCR
-        text_leg = ""
-        conf_leg = 0.0
-        t_leg = 0.0
-        if use_legacy:
-            t0 = time.time()
-            text_leg, conf_leg = ocr_legacy.read_text(cropped)
-            t_leg = time.time() - t0
+        # Tesseract OCR
+        t0 = time.time()
+        text_tess, conf_tess = ocr_tesseract.read_text(padded_cropped)
+        t_tess = time.time() - t0
+
+        # Legacy OCR (Contour + HOG + SVM)
+        t0 = time.time()
+        text_leg, conf_leg, chars_leg = ocr_legacy.read_text(cropped)
+        t_leg = time.time() - t0
+            
+        # Robust OCR (Projection + HOG + SVM)
+        t0 = time.time()
+        text_rob, conf_rob, chars_rob = ocr_robust.read_text(cropped)
+        t_rob = time.time() - t0
             
         results.append({
             'cropped': cropped,
             'text_modern': text_mod,
             'conf_modern': conf_mod,
             'time_modern': t_mod,
+            'text_tesseract': text_tess,
+            'conf_tesseract': conf_tess,
+            'time_tesseract': t_tess,
             'text_legacy': text_leg,
             'conf_legacy': conf_leg,
-            'time_legacy': t_leg
+            'time_legacy': t_leg,
+            'chars_legacy': chars_leg,
+            'text_robust': text_rob,
+            'conf_robust': conf_rob,
+            'time_robust': t_rob,
+            'chars_robust': chars_rob
         })
         
         # Log to database (we log the modern one as default, but you can choose)
@@ -76,8 +122,13 @@ tab1, tab2 = st.tabs(["🔍 Detection & OCR", "🗄️ Database Records"])
 
 with tab1:
     st.sidebar.header("Settings")
-    compare_mode = st.sidebar.checkbox("Compare with Legacy (HOG+SVM)", value=True, 
-                                       help="Run the old contour-based SVM alongside the new EasyOCR deep learning model for comparison.")
+    compare_mode = st.sidebar.checkbox("Show Multi-Method Comparison", value=True, 
+                                       help="Compare Legacy SVM, Robust SVM, EasyOCR, and Tesseract side-by-side.")
+    
+    st.sidebar.divider()
+    image_type = st.sidebar.radio("Input Image Type", 
+                                  ["Full Vehicle Image", "Already Cropped Plate"],
+                                  help="Select 'Already Cropped Plate' if you are uploading an image that is just the license plate. This bypasses the YOLO detection phase.")
     
     uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
     
@@ -93,7 +144,8 @@ with tab1:
             
             if st.button("Run ALPR", type="primary"):
                 with st.spinner("Processing..."):
-                    img_result, ocr_results = process_image(image, use_legacy=compare_mode)
+                    is_cropped = (image_type == "Already Cropped Plate")
+                    img_result, ocr_results = process_image(image, use_legacy=compare_mode, is_cropped=is_cropped)
                     
                 st.subheader("Detection Results")
                 st.image(cv2.cvtColor(img_result, cv2.COLOR_BGR2RGB), use_container_width=True)
@@ -105,10 +157,29 @@ with tab1:
                         st.image(cv2.cvtColor(res['cropped'], cv2.COLOR_BGR2RGB), width=200)
                         
                         if compare_mode:
-                            st.success(f"**Modern (EasyOCR):** {res['text_modern']} (Conf: {res['conf_modern']:.2f}) - {res['time_modern']:.2f}s")
-                            st.warning(f"**Legacy (HOG+SVM):** {res['text_legacy']} (Conf: {res['conf_legacy']:.2f}) - {res['time_legacy']:.2f}s")
+                            st.write("---")
+                            st.markdown("##### ✂️ Segmentation Comparison")
+                            col_c, col_p = st.columns(2)
+                            with col_c:
+                                st.caption("Old Contour Method:")
+                                if res.get('chars_legacy'):
+                                    st.image(res['chars_legacy'], width=30)
+                                else:
+                                    st.caption("*(No characters extracted)*")
+                            with col_p:
+                                st.caption("New Projection Method:")
+                                if res.get('chars_robust'):
+                                    st.image(res['chars_robust'], width=30)
+                                else:
+                                    st.caption("*(No characters extracted)*")
+                            
+                            st.write("---")
+                            st.success(f"**EasyOCR:** {res['text_modern']} (Conf: {res['conf_modern']:.2f}) - {res['time_modern']:.2f}s")
+                            st.info(f"**Tesseract OCR:** {res['text_tesseract']} (Conf: {res['conf_tesseract']:.2f}) - {res['time_tesseract']:.2f}s")
+                            st.warning(f"**Legacy (Contour+SVM):** {res['text_legacy']} (Conf: {res['conf_legacy']:.2f}) - {res['time_legacy']:.2f}s")
+                            st.error(f"**Robust (Proj+SVM):** {res['text_robust']} (Conf: {res['conf_robust']:.2f}) - {res['time_robust']:.2f}s")
                         else:
-                            st.success(f"**Plate Text:** {res['text_modern']} (Conf: {res['conf_modern']:.2f})")
+                            st.success(f"**Plate Text (Robust):** {res['text_robust']} (Conf: {res['conf_robust']:.2f})")
                         st.divider()
                         
 with tab2:

@@ -2,10 +2,10 @@ import cv2
 from ultralytics import YOLO
 
 class LicensePlateDetector:
-    def __init__(self, model_path='yolov8n.pt'):
+    def __init__(self, model_path='models/best.pt'):
         """
         Initialize the YOLOv8 model for License Plate Detection.
-        For production, use a YOLOv8 model fine-tuned on Nepali license plates.
+        Loads the fine-tuned custom YOLOv8 model.
         """
         self.model = YOLO(model_path)
 
