@@ -72,7 +72,7 @@ Real-time-Licence-Plate-Recognition/
 
 1. **Clone the repository:**
    ```bash
-   git clone <repo-url>
+   git clone https://github.com/SandipAcharya/Real-time-Licence-Plate-Recognition
    cd Real-time-Licence-Plate-Recognition
    ```
 
