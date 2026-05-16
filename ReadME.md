@@ -11,23 +11,7 @@ The system has recently undergone a major architectural upgrade. We transitioned
 ### 1. The Legacy Pipeline (Fellowship Project)
 The original system utilized YOLOv7 for detection and a custom HOG + SVM pipeline for character recognition.
 
-```mermaid
-graph TD
-    subgraph OCR Training Phase
-        A[Devanagari Character Samples] --> B[Preprocessing & Binarization]
-        B --> C[Feature Extraction: HOG]
-        C --> D[Train SVM Classifier]
-    end
-
-    subgraph OCR Testing Phase
-        E[Input Vehicle Image] --> F[Number Plate Detection YOLOv7]
-        F --> G[Character Segmentation Contour Method]
-        G --> H[Preprocessing Polarity Normalization]
-        H --> I[Feature Extraction: HOG]
-        I --> J[Predict with Trained SVM]
-        J --> K[Output Text Label]
-    end
-```
+![Legacy System Architecture](datasets_link/image.png)
 
 ### 2. The Modern Comparative Architecture (Current)
 To refine the system and solve issues with blurry crops and connected Devanagari characters, we implemented a massive comparative pipeline. YOLOv8 isolates the plate, the image is mathematically sharpened, and it is fed into four distinct OCR extraction pathways simultaneously.
