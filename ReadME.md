@@ -80,6 +80,7 @@ Real-time-Licence-Plate-Recognition/
    ```bash
    pip install -r requirements.txt
    ```
+   download link for svm model: https://drive.google.com/drive/folders/1TA1eGBkXiJlsTOM3gFT0ZcvUBgZswqJo?usp=sharing
 
 3. **Install Tesseract OCR (Windows):**
    - Download the Tesseract installer from [UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki).
